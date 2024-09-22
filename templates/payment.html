@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Payment</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* Styles for the payment page */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .payment-container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        .payment-container h1 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .payment-details {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .payment-details p {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        .payment-button {
+            padding: 10px 20px;
+            background-color: #1abc9c;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 16px;
+        }
+        .payment-button:hover {
+            background-color: #16a085;
+        }
+    </style>
+</head>
+<body>
+    <div class="payment-container">
+        <h1>Payment</h1>
+        <div class="payment-details">
+            <p><strong>Payment Amount:</strong> <span id="payment-amount">0.2 TON</span></p>
+            <p><strong>TON Wallet Address:</strong> <span id="ton-wallet">TONXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</span></p>
+            <p>Please transfer the specified amount to the above TON wallet address. After successful payment, click the button below to confirm.</p>
+        </div>
+        <!-- Payment Confirmation Button -->
+        <button class="payment-button" onclick="confirmPayment()">Confirm Payment</button>
+    </div>
+
+    <script>
+        // Function to confirm payment
+        function confirmPayment() {
+            const userId = "{{ user_id }}"; // Get user_id from template variables
+            fetch('/payment_callback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId })
+            })
+            .then(response => response.text())
+            .then(data => {
+                alert('Payment confirmed! You can use the application for one month.');
+                // Redirect the user to the main page or another page
+                window.location.href = "/";
+            })
+            .catch(error => {
+                console.error('Error confirming payment:', error);
+                alert('There was an error confirming your payment. Please try again later.');
+            });
+        }
+
+        // Insert values from template variables
+        document.getElementById('payment-amount').innerText = "{{ payment_amount }} TON";
+        document.getElementById('ton-wallet').innerText = "{{ ton_wallet }}";
+    </script>
+</body>
+</html>

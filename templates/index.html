@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Web App с 3D Моделью</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Подключаем необходимые скрипты -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <style>
+        /* Ваши стили */
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #container {
+            width: 100%;
+            height: 60%;
+            position: relative;
+        }
+
+        #input-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            max-width: 600px;
+            padding: 15px;
+            background-color: #34495e;
+            border-radius: 10px;
+            margin-top: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.3s ease;
+        }
+
+        #input-container:hover {
+            background-color: #3b556f;
+        }
+
+        #text-input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            outline: none;
+            font-size: 16px;
+            border-radius: 5px;
+            background-color: #3b556f;
+            color: #ecf0f1;
+            transition: background-color 0.3s ease;
+            resize: none;
+        }
+
+        #text-input:focus {
+            background-color: #4a6b8c;
+        }
+
+        #send-button {
+            background-color: #1abc9c;
+            border: none;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 5px;
+            margin-left: 10px;
+            transition: background-color 0.3s ease;
+        }
+
+        #send-button:hover {
+            background-color: #16a085;
+        }
+
+        #send-button img {
+            width: 24px;
+            height: 24px;
+        }
+
+        #response-text {
+            margin-top: 20px;
+            padding: 20px;
+            font-size: 18px;
+            text-align: center;
+            background-color: #34495e;
+            border-radius: 10px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            overflow-wrap: break-word;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 20px;
+            display: none;
+        }
+
+        @media screen and (max-width: 768px) {
+            #container {
+                height: 50%;
+            }
+
+            #input-container,
+            #response-text {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <!-- Контейнер для 3D модели -->
+        <div id="loading">Загрузка, пожалуйста, подождите...</div>
+    </div>
+    <div id="response-text"></div>
+    <div id="input-container">
+        <textarea id="text-input" placeholder="Ваш вопрос?"></textarea>
+        <button id="send-button"><img src="/static/models/images/Icon.png" alt="Отправить"></button>
+    </div>
+    <script>
+        // Инициализация Telegram Web App
+        Telegram.WebApp.ready();
+
+        // Функция для автоматического изменения высоты textarea
+        function adjustTextareaHeight(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = (textarea.scrollHeight) + 'px';
+        }
+
+        const textInput = document.getElementById('text-input');
+        textInput.addEventListener('input', () => adjustTextareaHeight(textInput));
+
+        // Функция отправки запроса
+        function sendRequest() {
+            const text = document.getElementById('text-input').value.trim();
+            if (!text) {
+                alert('Пожалуйста, введите текст.');
+                return;
+            }
+
+            // Отправка POST-запроса на сервер
+            fetch('/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    // Обновление текста ответа
+                    document.getElementById('response-text').innerText = data.reply;
+                    adjustTextareaHeight(document.getElementById('response-text'));
+
+                    // Воспроизведение аудио
+                    if (data.audio_file) {
+                        const audio = new Audio(data.audio_file);
+                        audio.play();
+                    }
+                }
+                // Очистка поля ввода
+                document.getElementById('text-input').value = '';
+                adjustTextareaHeight(textInput);
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Произошла ошибка при обработке запроса.');
+            });
+        }
+
+        // Обработчики событий для кнопки и нажатия Enter
+        document.getElementById('send-button').addEventListener('click', sendRequest);
+
+        document.getElementById('text-input').addEventListener('keypress', function (event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendRequest();
+            }
+        });
+
+        // Three.js настройка сцены
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(100, window.innerWidth / (window.innerHeight * 0.6), 0.1, 500);
+        camera.position.set(0, 0, 3);  // Отодвигаем камеру назад
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight * 0.6);  // Устанавливаем размер рендерера
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        const loader = new THREE.GLTFLoader();  // Создаем загрузчик GLTF моделей
+        const loadingElement = document.getElementById('loading');  // Элемент для отображения статуса загрузки
+        let currentModel;  // Переменная для текущей модели
+
+        // URL-адреса моделей (можно добавить больше моделей при необходимости)
+        const modelUrls = ['/static/models/android.glb'];
+        let interval;  // Переменная для хранения интервала переключения моделей
+
+        // Освещение
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(10, 10, 10);
+        scene.add(light);
+        const ambientLight = new THREE.AmbientLight(0x404040); // мягкий свет
+        scene.add(ambientLight);
+
+        // Функция для плавного вращения модели с 0 до 180 градусов по часовой стрелке
+        function rotateModelRightToLeft() {
+            const targetRotation = Math.PI / 2;  // Цель: 90 градусов (π/2 радиан)
+            const rotationSpeed = 0.02;  // Скорость вращения
+            const rotationInterval = setInterval(() => {
+                if (currentModel.rotation.y < targetRotation) {
+                    currentModel.rotation.y += rotationSpeed;
+                    if (currentModel.rotation.y >= targetRotation) {
+                        currentModel.rotation.y = targetRotation;
+                        clearInterval(rotationInterval);  // Остановка вращения после достижения 90 градусов
+                        setTimeout(() => {
+                            rotateModelLeftToRight();  // После паузы поворот в обратную сторону
+                        }, 3000);  // Пауза на 3 секунды
+                    }
+                }
+            }, 16);  // Обновление каждые ~16 мс (60 FPS)
+        }
+
+        // Функция для плавного вращения модели обратно
+        function rotateModelLeftToRight(targetRotation = 0, rotationSpeed = 0.02, callback) {
+            const updateRotation = () => {
+                if (currentModel.rotation.y > targetRotation) {
+                    currentModel.rotation.y -= rotationSpeed;
+                    if (currentModel.rotation.y <= targetRotation) {
+                        currentModel.rotation.y = targetRotation;
+                        if (callback) callback();  // Вызов колбэка, если он есть
+                    } else {
+                        requestAnimationFrame(updateRotation);
+                    }
+                }
+            };
+
+            requestAnimationFrame(updateRotation);  // Запускаем анимацию
+        }
+
+        // Загрузка модели и инициализация анимаций
+        loader.load(modelUrls[0], function (gltf) {
+            currentModel = gltf.scene;
+            currentModel.scale.set(1.0, 1.3, 1.0);
+            currentModel.rotation.y = 0;  // Начинаем с 0 градусов
+            scene.add(currentModel);
+
+            // Инициализация AnimationMixer для управления анимациями
+            const mixer = new THREE.AnimationMixer(currentModel);
+
+            // Поиск и запуск анимации "1Moving" с интервалом
+            const moving = gltf.animations.find(anim => anim.name === '1Moving');
+            if (moving) {
+                const actionMoving = mixer.clipAction(moving);
+                actionMoving.play();
+
+                // Остановка анимации через 5 секунд и повтор через 10 секунд
+                setInterval(() => {
+                    actionMoving.reset().play();
+                    setTimeout(() => {
+                        actionMoving.stop();
+                    }, 5000);
+                }, 10000);
+            }
+
+            // Поиск и запуск анимации "2Blinking" с интервалом
+            const blinking = gltf.animations.find(anim => anim.name === '2Blinking');
+            if (blinking) {
+                const actionBlink = mixer.clipAction(blinking);
+                setInterval(() => {
+                    actionBlink.reset().play();
+                    setTimeout(() => {
+                        actionBlink.stop();
+                    }, 2500);
+                }, 10000);
+            }
+
+            rotateModelRightToLeft();  // Плавно поворачиваем модель до 90 градусов
+            animate(mixer);  // Запуск анимации сцены
+        }, function (xhr) {
+            // Показываем индикатор загрузки
+            loadingElement.style.display = 'block';
+            loadingElement.innerText = `Загружено ${(xhr.loaded / xhr.total * 100).toFixed(2)}%`;
+        }, function (error) {
+            console.error(error);
+            loadingElement.innerText = 'Не удалось загрузить модель';
+        });
+
+        const clock = new THREE.Clock();
+        // Анимация сцены
+        function animate(mixer) {
+            requestAnimationFrame(() => animate(mixer));
+
+            const delta = clock.getDelta();
+            if (mixer) mixer.update(delta);
+
+            renderer.render(scene, camera);
+        }
+
+        // Обработка изменения размера окна для корректного отображения сцены
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight * 0.6;
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>
