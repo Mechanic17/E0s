@@ -1,20 +1,28 @@
+# docker-compose.yml
+
 version: '3.8'
 
 services:
   flask_service:
-    image: eos8000/eos-app:latest
+    build:
+      context: ./app
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    volumes:
-      - ./models:/app/models
     environment:
       - APP_URL=http://213.173.108.102:8000
+    depends_on:
+      - bot_service
 
   bot_service:
-    image: your_dockerhub_username/eos-bot:latest
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - APP_URL=http://213.173.108.102:8000
+      - PAYMENT_AMOUNT=${PAYMENT_AMOUNT}
+      - TON_WALLET=${TON_WALLET}
     volumes:
       - ./logs:/logs
       - ./user_data.db:/app/user_data.db

@@ -1,3 +1,5 @@
+# app/Dockerfile
+
 FROM python:3.9-slim
 
 # Устанавливаем рабочую директорию
@@ -12,11 +14,8 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем всё содержимое в контейнер
+# Копируем всё содержимое приложения в контейнер
 COPY . .
-
-# Убедитесь, что модели копируются в контейнер
-COPY models/ /app/models/
 
 # Открываем порт для приложения Flask
 EXPOSE 8000

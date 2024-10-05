@@ -1,3 +1,5 @@
+# .github/workflows/docker-image.yml
+
 name: Build and Push Docker Images
 
 on:
@@ -25,7 +27,6 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    # Сборка и загрузка образа для приложения (app)
     - name: Build and push App Docker image
       uses: docker/build-push-action@v3
       with:
@@ -34,7 +35,6 @@ jobs:
         push: true
         tags: ${{ secrets.DOCKER_USERNAME }}/eos-app:latest,${{ secrets.DOCKER_USERNAME }}/eos-app:v1.0.0
 
-    # Сборка и загрузка образа для бота (bot)
     - name: Build and push Bot Docker image
       uses: docker/build-push-action@v3
       with:

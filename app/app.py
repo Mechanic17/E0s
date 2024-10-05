@@ -1,9 +1,12 @@
+# app/app.py
+
 import os
 from flask import Flask, request, jsonify, render_template
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import SpeechT5Processor, SpeechT5ForTextToSpeech, SpeechT5HifiGan
 import torch
 import soundfile as sf
+import uuid  # Добавлено для генерации уникальных имён файлов
 
 app = Flask(__name__)
 
@@ -64,8 +67,11 @@ def process():
             vocoder=vocoder
         )
 
+        # Генерация уникального имени файла для аудио
+        unique_id = str(uuid.uuid4())
+        audio_file = f'static/output_{unique_id}.wav'
+
         # Сохраняем аудио файл
-        audio_file = 'static/output.wav'
         sf.write(audio_file, speech.numpy(), samplerate=16000)
 
         return jsonify({
