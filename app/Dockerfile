@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем всё содержимое приложения в контейнер
 COPY . .
 
+# Отладка: выводим содержимое директории /app
+RUN ls -la /app
+
 # Открываем порт для приложения Flask
 EXPOSE 8000
 

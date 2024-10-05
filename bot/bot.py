@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from telebot import TeleBot, types
 
-TOKEN = os.getenv('7220208121:AAFwXbn7zCCvuyHUPCA3iqeX9V4BsuQ54ec')
+TOKEN = os.getenv('7275598353:AAHmHOXe8MG3aE7cslfvaoenXWkGwrap86w')
 bot = TeleBot(TOKEN)
 
 # Настройка логирования

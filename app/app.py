@@ -1,12 +1,10 @@
-# app/app.py
-
 import os
+import uuid  # Для генерации уникальных имён файлов
 from flask import Flask, request, jsonify, render_template
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import SpeechT5Processor, SpeechT5ForTextToSpeech, SpeechT5HifiGan
 import torch
 import soundfile as sf
-import uuid  # Добавлено для генерации уникальных имён файлов
 
 app = Flask(__name__)
 
