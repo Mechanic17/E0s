@@ -1,6 +1,10 @@
+# app/.dockerignore
+
 # Исключаем ненужные файлы и директории
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 .DS_Store
-venv/
 .env
+venv/
