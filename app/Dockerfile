@@ -10,6 +10,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc libsndfile1 && \
     rm -rf /var/lib/apt/lists/*
 
+# Обновляем pip до последней версии
+RUN pip install --no-cache-dir --upgrade pip
+
 # Копируем файл зависимостей и устанавливаем их
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

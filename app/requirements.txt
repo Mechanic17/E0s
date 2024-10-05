@@ -1,6 +1,6 @@
 Flask==2.0.1
-torch==2.0.1
-torchaudio==2.0.1
+torch
+torchaudio
 transformers==4.27.1
 sentencepiece==0.1.96
 soundfile
