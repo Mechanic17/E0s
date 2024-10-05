@@ -1,24 +1,22 @@
 version: '3.8'
 
 services:
+  flask_service:
+    image: eos8000/eos-app:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+    environment:
+      - APP_URL=http://213.173.108.102:8000
+
   bot_service:
-    build:
-      context: ./bot
-      dockerfile: Dockerfile
+    image: your_dockerhub_username/eos-bot:latest
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - APP_URL=http://213.173.108.102
+      - APP_URL=http://213.173.108.102:8000
     volumes:
       - ./logs:/logs
       - ./user_data.db:/app/user_data.db
     depends_on:
       - flask_service
-
-  flask_service:
-    build:
-      context: ./app
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./models:/app/models  # Монтируем директорию с моделями
