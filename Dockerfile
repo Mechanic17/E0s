@@ -4,16 +4,29 @@ FROM python:3.9-slim
 # Устанавливаем рабочую директорию в контейнере
 WORKDIR /app
 
-# Копируем файл зависимостей (если есть) или создаем его в этом Dockerfile
-COPY requirements.txt requirements.txt
+# Устанавливаем системные зависимости для сборки Python-пакетов
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+# Обновляем pip до последней версии
+RUN pip install --upgrade pip
+
+# Копируем файл зависимостей
+COPY requirements.txt .
 
 # Устанавливаем зависимости через pip
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Удаляем системные зависимости, если они больше не нужны, чтобы уменьшить размер образа
+RUN apt-get purge -y gcc build-essential && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+
 # Копируем все файлы приложения в контейнер
 COPY . .
 
-# Экспортируем переменные окружения (при необходимости)
+# Устанавливаем переменные окружения
 ENV FLASK_APP=app.py
 
 # Открываем порт, на котором Flask-приложение будет работать
