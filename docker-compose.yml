@@ -3,29 +3,22 @@ version: '3.8'
 services:
   bot_service:
     build:
-      context: .
+      context: ./bot
       dockerfile: Dockerfile
     environment:
-      - TOKEN=${TOKEN} # Установите токен телеграм-бота через .env
-      - APP_URL=http://localhost:8000
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - APP_URL=http://213.173.108.102
     volumes:
-      - ./logs:/logs # Для хранения логов
+      - ./logs:/logs
       - ./user_data.db:/app/user_data.db
     depends_on:
       - flask_service
 
   flask_service:
     build:
-      context: .
-      dockerfile: Dockerfile-flask
+      context: ./app
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    environment:
-      - MODEL_SERVICE_URL=http://model_service:5001
-
-  model_service:
-    image: your_model_image
-    ports:
-      - "5001:5001"
-    environment:
-      - MODEL_SERVICE_API_KEY=${MODEL_SERVICE_API_KEY} # Пример переменной окружения для сервиса модели
+    volumes:
+      - ./models:/app/models  # Монтируем директорию с моделями

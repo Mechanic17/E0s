@@ -1,18 +1,25 @@
-FROM python:3.9
+FROM python:3.9-slim
 
+# Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем файл с зависимостями
-COPY requirements.txt .
+# Устанавливаем системные зависимости
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libsndfile1 && \
+    rm -rf /var/lib/apt/lists/*
 
-# Устанавливаем зависимости
+# Копируем файл зависимостей и устанавливаем их
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем код приложения
+# Копируем всё содержимое в контейнер
 COPY . .
 
-# Открываем порт для веб-приложения
+# Убедитесь, что модели копируются в контейнер
+COPY models/ /app/models/
+
+# Открываем порт для приложения Flask
 EXPOSE 8000
 
-# Команда для запуска приложения
+# Запускаем приложение
 CMD ["python", "app.py"]
