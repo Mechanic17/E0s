@@ -1,20 +1,16 @@
-# bot/Dockerfile
-
 FROM python:3.9-slim
 
 WORKDIR /app
 
-# Обновляем pip до последней версии
+# Обновляем pip
 RUN pip install --no-cache-dir --upgrade pip
 
-# Копируем файл с зависимостями
+# Копируем и устанавливаем зависимости
 COPY requirements.txt .
-
-# Устанавливаем зависимости
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Копируем код бота
 COPY . .
 
-# Команда для запуска бота
+# Запускаем бота
 CMD ["python", "bot.py"]
