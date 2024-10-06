@@ -16,7 +16,7 @@ logging.basicConfig(filename='logs/telegram_bot.log', level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 # Получаем URL приложения из переменной окружения
-APP_URL = os.getenv('APP_URL', 'http://localhost:8000')
+APP_URL = os.getenv('APP_URL', 'https://projecteos.xyz')
 
 print("Bot is starting...")
 logger.info("Bot is starting...")

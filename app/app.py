@@ -1,86 +1,180 @@
 import os
-import uuid  # Для генерации уникальных имён файлов
-from flask import Flask, request, jsonify, render_template
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers import SpeechT5Processor, SpeechT5ForTextToSpeech, SpeechT5HifiGan
-import torch
-import soundfile as sf
+import logging
+import sqlite3
+from datetime import datetime, timedelta
+from telebot import TeleBot, types
 
-app = Flask(__name__)
+# Получение токена из переменной окружения
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not TOKEN:
+    raise ValueError("Переменная окружения TELEGRAM_BOT_TOKEN не установлена.")
 
-# Путь к директории с моделями
-MODELS_DIR = 'models'
+bot = TeleBot(TOKEN)
 
-# Инициализация GPT-2 модели и токенизатора
-gpt2_model_path = os.path.join(MODELS_DIR, 'gpt2')
-tokenizer = AutoTokenizer.from_pretrained(gpt2_model_path)
-model = AutoModelForCausalLM.from_pretrained(gpt2_model_path)
+# Настройка логирования
+LOG_DIR = 'logs'
+LOG_FILE = os.path.join(LOG_DIR, 'telegram_bot.log')
 
-# Инициализация моделей SpeechT5
-speecht5_processor_path = os.path.join(MODELS_DIR, 'speecht5_tts_processor')
-speecht5_model_path = os.path.join(MODELS_DIR, 'speecht5_tts_model')
-speecht5_vocoder_path = os.path.join(MODELS_DIR, 'speecht5_hifigan_vocoder')
+if not os.path.exists(LOG_DIR):
+    os.makedirs(LOG_DIR)
 
-processor = SpeechT5Processor.from_pretrained(speecht5_processor_path)
-speech_model = SpeechT5ForTextToSpeech.from_pretrained(speecht5_model_path)
-vocoder = SpeechT5HifiGan.from_pretrained(speecht5_vocoder_path)
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+)
+logger = logging.getLogger(__name__)
 
-# Загрузка эмбеддингов голоса (здесь используется заранее сохранённый эмбеддинг)
-speaker_embeddings_path = os.path.join(MODELS_DIR, 'speaker_embeddings.pt')
-if os.path.exists(speaker_embeddings_path):
-    speaker_embeddings = torch.load(speaker_embeddings_path)
-else:
-    # Если файл с эмбеддингами не найден, используем нулевой тензор
-    speaker_embeddings = torch.zeros((1, 768))
+# Получаем URL приложения из переменной окружения
+APP_URL = os.getenv('APP_URL', 'https://yourdomain.com/index.html')  # Замените на ваш реальный HTTPS URL
 
-@app.route('/')
-def index():
-    # Отображение главной страницы
-    return render_template('index.html')
+print("Bot is starting...")
+logger.info("Bot is starting...")
 
-@app.route('/process', methods=['POST'])
-def process():
-    data = request.json
-    text = data.get('message')
-    if not text:
-        return jsonify({'error': 'No text provided'}), 400
+# Инициализируем базу данных SQLite
+conn = sqlite3.connect('user_data.db', check_same_thread=False)
+cursor = conn.cursor()
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY,
+        launches_left INTEGER,
+        payment_expiry TEXT
+    )
+''')
+conn.commit()
 
-    try:
-        # Генерация ответа с помощью GPT-2
-        input_ids = tokenizer.encode(text, return_tensors='pt')
-        output_ids = model.generate(
-            input_ids,
-            max_length=100,
-            num_return_sequences=1,
-            no_repeat_ngram_size=2,
-            early_stopping=True
+# Стоимость и номер счёта для оплаты
+PAYMENT_AMOUNT = 0.2  # Стоимость в TONCOIN
+TON_WALLET = 'ВАШ_НОМЕР_СЧЁТА_TON'  # Замените на ваш номер счёта
+
+# Обработчик команды /start
+@bot.message_handler(commands=['start'])
+def start(message):
+    user = message.from_user
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add(types.KeyboardButton("Support"))
+    keyboard.add(types.KeyboardButton("Запуск"))  # Изменено с "Launch" на "Запуск"
+    bot.send_message(
+        message.chat.id,
+        f'Hello, {user.first_name}!',
+        reply_markup=keyboard
+    )
+    logger.info(f'Sent welcome message to user {message.chat.id}')
+    print(f"Sent welcome message to user {message.chat.id}")
+
+    # Добавляем пользователя в базу данных, если его там нет
+    cursor.execute("SELECT * FROM users WHERE user_id=?", (message.chat.id,))
+    user_data = cursor.fetchone()
+    if not user_data:
+        cursor.execute(
+            "INSERT INTO users (user_id, launches_left, payment_expiry) VALUES (?, ?, ?)",
+            (message.chat.id, 2, None)
         )
-        generated_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        conn.commit()
+        logger.info(f'Added new user {message.chat.id} to the database.')
+        print(f"Added new user {message.chat.id} to the database.")
 
-        # Генерация аудио с помощью SpeechT5
-        inputs = processor(text=generated_text, return_tensors="pt")
-        speech = speech_model.generate_speech(
-            inputs["input_ids"],
-            speaker_embeddings,
-            vocoder=vocoder
+# Обработчик нажатий кнопок
+@bot.message_handler(func=lambda message: True)
+def on_click(message):
+    text = message.text
+    if text == 'Support':
+        message_text = (
+            f"To continue using the application after 2 free launches, "
+            f"please make a payment of {PAYMENT_AMOUNT} TON to the wallet {TON_WALLET}."
         )
+        bot.send_message(message.chat.id, message_text)
+        logger.info(f'Sent support message to user {message.chat.id}')
+        print(f"Sent support message to user {message.chat.id}")
 
-        # Генерация уникального имени файла для аудио
-        unique_id = str(uuid.uuid4())
-        audio_file = f'static/output_{unique_id}.wav'
+    elif text == 'Запуск':  # Обработка кнопки "Запуск"
+        cursor.execute(
+            "SELECT launches_left, payment_expiry FROM users WHERE user_id=?",
+            (message.chat.id,)
+        )
+        user_data = cursor.fetchone()
+        if user_data:
+            launches_left, payment_expiry = user_data
+            if payment_expiry:
+                # Проверяем, активен ли оплаченный период
+                expiry_date = datetime.strptime(payment_expiry, '%Y-%m-%d %H:%M:%S')
+                if datetime.now() < expiry_date:
+                    # Оплаченный период активен
+                    send_web_app_button(message.chat.id, "Вы уже оплатили доступ до "
+                                                           f"{expiry_date.strftime('%Y-%m-%d %H:%M:%S')}.")
+                    logger.info(f'User {message.chat.id} accessed with active payment.')
+                else:
+                    # Оплаченный период истек
+                    cursor.execute(
+                        "UPDATE users SET payment_expiry=? WHERE user_id=?",
+                        (None, message.chat.id)
+                    )
+                    conn.commit()
+                    logger.info(f'Payment period expired for user {message.chat.id}. Resetting payment_expiry.')
+                    check_launches(message, launches_left)
+            else:
+                check_launches(message, launches_left)
+        else:
+            # Пользователь не найден в базе данных, добавляем его
+            cursor.execute(
+                "INSERT INTO users (user_id, launches_left, payment_expiry) VALUES (?, ?, ?)",
+                (message.chat.id, 1, None)
+            )
+            conn.commit()
+            send_web_app_button(message.chat.id, "Добро пожаловать! У вас 1 запуск.")
+            logger.info(f'New user {message.chat.id} accessed, launches left: 1.')
+    else:
+        bot.send_message(message.chat.id, "Please use the provided buttons.")
+        logger.info(f'User {message.chat.id} sent an unknown command.')
 
-        # Сохраняем аудио файл
-        sf.write(audio_file, speech.numpy(), samplerate=16000)
+def check_launches(message, launches_left):
+    if launches_left > 0:
+        launches_left -= 1
+        cursor.execute(
+            "UPDATE users SET launches_left=? WHERE user_id=?",
+            (launches_left, message.chat.id)
+        )
+        conn.commit()
+        send_web_app_button(message.chat.id, f"Запуск выполнен. Осталось запусков: {launches_left}.")
+        logger.info(f'User {message.chat.id} accessed, launches left: {launches_left}.')
+    else:
+        message_text = (
+            f"Your free launches are over. Please make a payment of {PAYMENT_AMOUNT} TON "
+            f"to the wallet {TON_WALLET} to continue."
+        )
+        bot.send_message(message.chat.id, message_text)
+        logger.info(f'User {message.chat.id} attempted to access without remaining launches.')
 
-        return jsonify({
-            'reply': generated_text,
-            'audio_file': f'/{audio_file}'
-        })
+def send_web_app_button(chat_id, text):
+    """
+    Отправляет сообщение с кнопкой для открытия веб-приложения.
+    """
+    markup = types.InlineKeyboardMarkup()
+    button = types.InlineKeyboardButton("Открыть веб-приложение", url=APP_URL)
+    markup.add(button)
+    bot.send_message(chat_id, text, reply_markup=markup)
 
-    except Exception as e:
-        # Обработка ошибок и возврат сообщения об ошибке
-        return jsonify({'error': str(e)}), 500
+# Обработчик подтверждения оплаты
+@bot.message_handler(commands=['confirm_payment'])
+def confirm_payment(message):
+    user_id = message.chat.id
+    # Здесь вы должны проверить, поступил ли платеж от этого пользователя на ваш счёт TON
+    # Если платеж подтвержден, обновите payment_expiry для пользователя
+    payment_expiry = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
+    cursor.execute(
+        "UPDATE users SET payment_expiry=? WHERE user_id=?",
+        (payment_expiry, user_id)
+    )
+    conn.commit()
+    bot.send_message(user_id, "Payment confirmed! You can use the application for one month.")
+    logger.info(f'Payment from user {user_id} confirmed.')
 
+# Запуск бота
 if __name__ == '__main__':
-    # Запуск приложения Flask на порту 8000
-    app.run(host='0.0.0.0', port=8000)
+    try:
+        logger.info("Запуск поллинга...")
+        print("Bot started and is waiting for messages...")
+        bot.polling(non_stop=True)
+    except Exception as e:
+        logger.error(f"Произошла ошибка: {e}")
+        print(f"Произошла ошибка: {e}")
