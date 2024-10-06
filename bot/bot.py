@@ -3,8 +3,14 @@ import logging
 import sqlite3
 from datetime import datetime, timedelta
 from telebot import TeleBot, types
+from telebot.types import KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# Получаем токен бота из переменной окружения
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+if not TOKEN:
+    print("Ошибка: переменная окружения TELEGRAM_BOT_TOKEN не установлена.")
+    exit(1)
+
 bot = TeleBot(TOKEN)
 
 # Настройка логирования
@@ -32,15 +38,20 @@ conn.commit()
 PAYMENT_AMOUNT = 0.2  # Стоимость в TONCOIN
 TON_WALLET = 'ВАШ_НОМЕР_СЧЁТА_TON'  # Замените на ваш номер счёта
 
+# Функция для отправки ссылки на веб-приложение
+def send_app_link(chat_id):
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    web_app_button = KeyboardButton(text="Открыть Web App", web_app=WebAppInfo(url=APP_URL))
+    keyboard.add(web_app_button)
+    keyboard.add(KeyboardButton("Support"))
+    bot.send_message(chat_id, "Нажмите кнопку ниже, чтобы открыть приложение:", reply_markup=keyboard)
+
 # Обработчик команды /start
 @bot.message_handler(commands=['start'])
 def start(message):
     user = message.from_user
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(types.KeyboardButton("Support"))
-    keyboard.add(types.KeyboardButton("Launch"))
-    bot.send_message(message.chat.id, f'Hello, {user.first_name}!', reply_markup=keyboard)
-    logger.info(f'Sent welcome message to user {message.chat.id}')
+    send_app_link(message.chat.id)
+    logger.info(f'Sent welcome message with Web App to user {message.chat.id}')
     print(f"Sent welcome message to user {message.chat.id}")
 
     # Добавляем пользователя в базу данных, если его там нет
@@ -56,12 +67,12 @@ def start(message):
 def on_click(message):
     text = message.text
     if text == 'Support':
-        message_text = f"To continue using the application after 2 free launches, please make a payment of {PAYMENT_AMOUNT} TON to the wallet {TON_WALLET}."
+        message_text = f"Чтобы продолжить использование приложения после 2 бесплатных запусков, пожалуйста, сделайте платеж в размере {PAYMENT_AMOUNT} TON на кошелек {TON_WALLET}."
         bot.send_message(message.chat.id, message_text)
         logger.info(f'Sent support message to user {message.chat.id}')
         print(f"Sent support message to user {message.chat.id}")
         
-    elif text == 'Запуск':
+    elif text == 'Открыть Web App':
         cursor.execute("SELECT launches_left, payment_expiry FROM users WHERE user_id=?", (message.chat.id,))
         user_data = cursor.fetchone()
         if user_data:
@@ -71,9 +82,7 @@ def on_click(message):
                 expiry_date = datetime.strptime(payment_expiry, '%Y-%m-%d %H:%M:%S')
                 if datetime.now() < expiry_date:
                     # Оплаченный период активен
-                    keyboard = types.InlineKeyboardMarkup()
-                    keyboard.add(types.InlineKeyboardButton("Welcome EOs 3.0", url=APP_URL))
-                    bot.send_message(message.chat.id, "Click here", reply_markup=keyboard)
+                    send_app_link(message.chat.id)
                     logger.info(f'User {message.chat.id} accessed with active payment.')
                 else:
                     # Оплаченный период истек
@@ -87,12 +96,10 @@ def on_click(message):
             cursor.execute("INSERT INTO users (user_id, launches_left, payment_expiry) VALUES (?, ?, ?)",
                            (message.chat.id, 1, None))
             conn.commit()
-            keyboard = types.InlineKeyboardMarkup()
-            keyboard.add(types.InlineKeyboardButton("Welcome EOs 3.0", url=APP_URL))
-            bot.send_message(message.chat.id, "Click here", reply_markup=keyboard)
+            send_app_link(message.chat.id)
             logger.info(f'New user {message.chat.id} accessed, launches left: 1.')
     else:
-        bot.send_message(message.chat.id, "Please use the provided buttons.")
+        bot.send_message(message.chat.id, "Пожалуйста, используйте предоставленные кнопки.")
         logger.info(f'User {message.chat.id} sent an unknown command.')
 
 def check_launches(message, launches_left):
@@ -100,12 +107,10 @@ def check_launches(message, launches_left):
         launches_left -=1
         cursor.execute("UPDATE users SET launches_left=? WHERE user_id=?", (launches_left, message.chat.id))
         conn.commit()
-        keyboard = types.InlineKeyboardMarkup()
-        keyboard.add(types.InlineKeyboardButton("Welcome EOs 3.0", url=APP_URL))
-        bot.send_message(message.chat.id, "Click here", reply_markup=keyboard)
+        send_app_link(message.chat.id)
         logger.info(f'User {message.chat.id} accessed, launches left: {launches_left}.')
     else:
-        message_text = f"Your free launches are over. Please make a payment of {PAYMENT_AMOUNT} TON to the wallet {TON_WALLET} to continue."
+        message_text = f"Ваши бесплатные запуски закончились. Пожалуйста, сделайте платеж в размере {PAYMENT_AMOUNT} TON на кошелек {TON_WALLET}, чтобы продолжить."
         bot.send_message(message.chat.id, message_text)
         logger.info(f'User {message.chat.id} attempted to access without remaining launches.')
 
@@ -118,10 +123,11 @@ def confirm_payment(message):
     payment_expiry = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
     cursor.execute("UPDATE users SET payment_expiry=? WHERE user_id=?", (payment_expiry, user_id))
     conn.commit()
-    bot.send_message(user_id, "Payment confirmed! You can use the application for one month.")
+    bot.send_message(user_id, "Платеж подтвержден! Вы можете использовать приложение в течение одного месяца.")
     logger.info(f'Payment from user {user_id} confirmed.')
 
 # Запуск бота
-bot.polling(non_stop=True)
-logger.info("Bot started and is waiting for messages...")
-print("Bot started and is waiting for messages...")
+if __name__ == '__main__':
+    bot.polling(non_stop=True)
+    logger.info("Bot started and is waiting for messages...")
+    print("Bot started and is waiting for messages...")
